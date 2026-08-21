@@ -25,7 +25,10 @@ trap '/bin/rm -rf "$fixture"' EXIT
     ]
   }
   File.write(File.join(root, "profiles.yaml"), YAML.dump(registry))
-  File.write(File.join(root, "profiles", "merge-a.yaml"), YAML.dump({"profile" => {"store-selected" => true}}))
+  File.write(File.join(root, "profiles", "merge-a.yaml"), YAML.dump({
+    "profile" => {"store-selected" => true},
+    "proxy-groups" => [{"name" => "STANDARD", "type" => "select", "proxies" => ["DIRECT"]}]
+  }))
   %w[rules proxies groups].each do |kind|
     File.write(File.join(root, "profiles", "#{kind}-a.yaml"), YAML.dump({"prepend" => [], "append" => [], "delete" => []}))
   end
@@ -44,6 +47,7 @@ print -r -- "$first" | /usr/bin/grep -q 'changed_files=4'
   abort unless group["prepend"].count { |x| x["name"] == "HKUST" } == 1
   abort unless rules["prepend"].include?("IP-CIDR,10.120.17.115/32,HKUST,no-resolve")
   abort unless merge.dig("dns", "fake-ip-filter").include?("remote.hkust-gz.edu.cn")
+  abort unless merge["proxy-groups"].count { |x| x["name"] == "HKUST" } == 1
 ' "$fixture"
 
 second="$($PROJECT_DIR/scripts/clash_enhancer.rb --action install --root "$fixture")"
@@ -55,9 +59,11 @@ $PROJECT_DIR/scripts/clash_enhancer.rb --action remove --root "$fixture" >/dev/n
   proxy = YAML.safe_load(File.read(File.join(root, "profiles", "proxies-a.yaml")))
   group = YAML.safe_load(File.read(File.join(root, "profiles", "groups-a.yaml")))
   rules = YAML.safe_load(File.read(File.join(root, "profiles", "rules-a.yaml")))
+  merge = YAML.safe_load(File.read(File.join(root, "profiles", "merge-a.yaml")))
   abort if proxy["prepend"].any? { |x| x["name"] == "HKUST-VPN" }
   abort if group["prepend"].any? { |x| x["name"] == "HKUST" }
   abort if rules["prepend"].any? { |x| x.to_s.include?("HKUST") || x.to_s.include?("zju-connect") }
+  abort if merge["proxy-groups"].any? { |x| x["name"] == "HKUST" }
 ' "$fixture"
 
 plist="$fixture/agent.plist"

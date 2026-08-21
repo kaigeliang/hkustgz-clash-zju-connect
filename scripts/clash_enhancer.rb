@@ -163,6 +163,24 @@ remote_profiles.each do |profile|
         dns.delete("fake-ip-filter") if filters.empty?
         document.delete("dns") if dns.empty?
       end
+
+      # Some subscriptions define a complete proxy-groups array in their Merge
+      # enhancement. Clash applies that array after the dedicated Groups
+      # enhancement, so HKUST must also be present here or it remains hidden.
+      merge_groups = document["proxy-groups"]
+      if merge_groups
+        abort "Expected proxy-groups to be an array in #{path}" unless merge_groups.is_a?(Array)
+        if options[:action] == "install"
+          unless merge_groups.any? { |entry| entry.is_a?(Hash) && entry["name"] == "HKUST" }
+            merge_groups.unshift({"name" => "HKUST", "type" => "select", "proxies" => ["HKUST-VPN", "DIRECT"]})
+            changed = true
+          end
+        else
+          before = merge_groups.length
+          merge_groups.delete_if { |entry| entry.is_a?(Hash) && entry["name"] == "HKUST" }
+          changed = before != merge_groups.length || changed
+        end
+      end
     end
 
     next unless changed
